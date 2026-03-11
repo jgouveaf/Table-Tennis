@@ -3,13 +3,13 @@ const ctx = canvas.getContext('2d');
 const scoreDisplay = document.getElementById('score-display');
 const infoDisplay = document.getElementById('info-display');
 
-// Camera & 3D Engine Setup
-// Câmera posicionada bem atrás e acima do jogador para visão em 3ª pessoa
-const camera = { x: 0, y: 220, z: -550, focus: 400 };
+// Nova Camera Setup Baseada na Referência Estilo WTT
+// Câmera muito mais baixa e bem posicionada ao final da mesa do jogador
+const camera = { x: 0, y: 50, z: -380, focus: 400 };
 
 function project(x, y, z) {
     const dz = z - camera.z;
-    if (dz <= 10) return null; // Behind or too close to camera
+    if (dz <= 10) return null; // Atrás da câmera
     const f = camera.focus / dz;
     return {
         x: canvas.width / 2 + (x - camera.x) * f,
@@ -23,9 +23,9 @@ function project(x, y, z) {
 let ball = {
     x: 0, y: 20, z: -170,
     vx: 0, vy: 0, vz: 0,
-    radius: 4,
+    radius: 3,
     state: 'idle',
-    timeScale: 1.0 // Para efeito de câmera lenta no saque
+    timeScale: 1.0 // Slow Motion Scale
 };
 
 // Character Stats
@@ -51,7 +51,7 @@ let lastHitter = 0;
 let lastBounceSide = 0; 
 let serveTossed = false;
 
-// Input tracking
+// Input
 const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
 window.addEventListener('keydown', (e) => {
@@ -61,7 +61,7 @@ window.addEventListener('keydown', (e) => {
     }
     const k = e.key.toLowerCase();
     
-    // Saque
+    // Saque (Toss com Câmera Lenta)
     if (k === 'x') {
         if ((gamePhase === 'START' || gamePhase === 'P1_SERVE') && !serveTossed) {
             serveTossed = true;
@@ -71,13 +71,13 @@ window.addEventListener('keydown', (e) => {
             ball.vx = 0;
             ball.vy = 8; // Altura do saque
             ball.vz = 0;
-            ball.timeScale = 0.3; // Câmera lenta
+            ball.timeScale = 0.3; // Activating Slow Motion
             infoDisplay.innerText = "Bata na bola! (C ou V)";
             infoDisplay.style.animation = "none";
         }
     }
     
-    // Forehand e Backhand
+    // Forehand (C) / Backhand (V)
     if (k === 'c' || k === 'v') {
         if (player.state === 'idle' || player.state === 'serve_toss') {
             player.state = k === 'c' ? 'forehand' : 'backhand';
@@ -97,7 +97,7 @@ function hitBallByPlayer(type) {
     lastHitter = 1;
     lastBounceSide = 0;
     gamePhase = 'RALLY';
-    ball.timeScale = 1.0; // Volta a velocidade normal
+    ball.timeScale = 1.0; // Desativa slow motion imediatamente
     infoDisplay.innerText = "";
     
     ball.vz = 14 + Math.random() * 3; 
@@ -168,7 +168,7 @@ function resetBall() {
             ball.y = 20;
             ball.z = ai.z - 5;
             ball.vy = 8;
-            ball.timeScale = 0.3;
+            ball.timeScale = 0.3; // Slow-mo AI saque test
             
             setTimeout(() => {
                 if(gamePhase !== 'P2_SERVE') return;
@@ -194,9 +194,8 @@ function updatePhysics() {
     player.x = Math.max(-140, Math.min(140, player.x));
     player.z = Math.max(-350, Math.min(-180, player.z));
 
-    // Player State Machine
+    // Player State Machine / Hitbox check
     if (player.state !== 'idle') {
-        // Se estiver em câmera lenta, o timer do player também roda em câmera lenta no saque
         player.timer += (gamePhase === 'P1_SERVE' ? ball.timeScale : 1.0);
         
         let hitboxWindowStart = 5;
@@ -207,7 +206,7 @@ function updatePhysics() {
             
             let dx = ball.x - player.x;
             let dz = ball.z - player.z;
-            let dy = ball.y - 25; 
+            let dy = ball.y - 20; 
             let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
             
             if (dist < 55 && ball.vz <= 2) {
@@ -220,7 +219,7 @@ function updatePhysics() {
         }
     }
 
-    // AI Logic
+    // AI Logic Tracking
     if (ball.vz > 0 && ball.z > -50) {
         let t = (200 - ball.z) / ball.vz;
         ai.targetX = ball.x + ball.vx * t;
@@ -234,7 +233,7 @@ function updatePhysics() {
     if (ai.x > ai.targetX + ai.speed) { ai.x -= ai.speed; ai.vx = -1; }
     ai.z = 240; 
 
-    // AI Animation
+    // AI Animation Process
     if (ai.state === 'idle' && ball.vz > 0 && ball.z > 140 && ball.z < 260) {
         ai.state = (ball.x > ai.x) ? 'forehand' : 'backhand';
         ai.timer = 0;
@@ -248,19 +247,19 @@ function updatePhysics() {
         if (ai.timer > 22) ai.state = 'idle';
     }
 
-    // Ball Move (with timeScale)
+    // Ball Move (Multiplicado pelo timeScale p/ Slow motion)
     if (ball.state === 'air') {
         ball.x += ball.vx * ball.timeScale;
         ball.y += ball.vy * ball.timeScale;
         ball.z += ball.vz * ball.timeScale;
-        ball.vy -= 0.5 * ball.timeScale; // GRAVITY
+        ball.vy -= 0.5 * ball.timeScale; // Gravidade no ar
         
-        // Mesa Ping (y < 0) e limites da mesa (Mesa é w=76, l=137)
+        // Colisao na Mesa Ping (y < 0) - Mesa Size = W=76, L=137
         if (ball.y < 0 && ball.y > -10 && ball.vy < 0) {
             if (ball.x > -76 && ball.x < 76 && ball.z > -137 && ball.z < 137) {
                 ball.y = 0;
                 ball.vy = Math.abs(ball.vy) * 0.8; 
-                ball.timeScale = 1.0; // Cancela slowmotion pós-quique
+                ball.timeScale = 1.0; 
                 
                 let side = ball.z < 0 ? 1 : 2;
                 
@@ -275,14 +274,14 @@ function updatePhysics() {
             }
         }
         
-        // Rede (Rede no z=0, altura y=15)
+        // Colisao Rede no Centro Z=0, Y=15
         if (Math.abs(ball.z) < Math.abs(ball.vz) && ball.y < 15.25 && ball.x > -85 && ball.x < 85) {
             ball.vz *= -0.3; 
             ball.vx *= 0.3;
             ball.timeScale = 1.0;
         }
 
-        // Chão Ping (y < -76)
+        // Queda no chão (Y < -76)
         if (ball.y < -76) {
             ball.timeScale = 1.0;
             if (gamePhase === 'P1_SERVE' || gamePhase === 'P2_SERVE') {
@@ -304,13 +303,14 @@ function updatePhysics() {
             }
         }
     } else if (ball.state === 'idle') {
+        // Bola acompanha o jogador antes de sacar
         if (gamePhase === 'P1_SERVE' || gamePhase === 'START') {
-            ball.x = player.x - 16;
-            ball.y = 20; 
+            ball.x = player.x - 12;
+            ball.y = 5; 
             ball.z = player.z - 2;
         } else if (gamePhase === 'P2_SERVE') {
-            ball.x = ai.x + 16;
-            ball.y = 20;
+            ball.x = ai.x + 12;
+            ball.y = 5;
             ball.z = ai.z - 5;
         }
     }
@@ -332,115 +332,116 @@ function drawPoly3D(points, color, strokeColor, lineWidth = 2) {
     ctx.fill();
     if (strokeColor) {
         ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = lineWidth * projPts[0].scale * (projPts[0].depth < 0 ? 0.3 : 1); 
-        ctx.lineWidth = Math.max(1, ctx.lineWidth); // Minimo de 1 px
+        // Escala a largura da linha de acordo com a profundidade e garante não ficar <1px
+        ctx.lineWidth = Math.max(1, lineWidth * projPts[0].scale * (projPts[0].depth < 0 ? 0.3 : 1)); 
         ctx.stroke();
     }
 }
 
-function drawInfinityArena() {
-    // Chão cinza escuro/preto
-    ctx.fillStyle = '#111';
+// Constroi a Arena do campeonato
+function drawArena() {
+    ctx.fillStyle = '#050505'; // Chão preto
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     const floorL = 800;
     const floorW = 600;
 
-    // Gradiente no fundo estilo Infinity Arena
-    let bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.4);
-    bgGrad.addColorStop(0, '#000');
-    bgGrad.addColorStop(1, '#2c043b');
+    // Fundo falso esfumado (Infinity Arena Background)
+    let bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.45);
+    bgGrad.addColorStop(0, '#100b14');
+    bgGrad.addColorStop(1, '#1b0e2b');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, canvas.width, canvas.height * 0.5);
 
-    // Linhas neon no chão
+    // Divisórias da quadra neon WTT Champions 
     const l1 = project(-floorW, -76, -floorL);
     const l2 = project(-floorW, -76, floorL);
     const r1 = project(floorW, -76, -floorL);
     const r2 = project(floorW, -76, floorL);
     if(l1 && l2 && r1 && r2) {
-        ctx.strokeStyle = '#b92b27';
+        ctx.strokeStyle = '#4a126b'; // Bordas roxas do chão
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(l1.x, l1.y); ctx.lineTo(l2.x, l2.y); ctx.stroke();
-        ctx.strokeStyle = '#1565C0';
         ctx.beginPath(); ctx.moveTo(r1.x, r1.y); ctx.lineTo(r2.x, r2.y); ctx.stroke();
     }
     
-    // Luzes LED da quadra, estilo WTT
+    // Painel Infinity Arena / Titaniuns lá no fundo
     drawPoly3D([
-        {x: -250, y: -76, z: 400}, {x: 250, y: -76, z: 400},
-        {x: 250, y: 150, z: 400}, {x: -250, y: 150, z: 400}
-    ], 'rgba(0,0,0,0.8)', '#e100ff'); // Muralha roxa lá no fundo
+        {x: -250, y: -76, z: 450}, {x: 250, y: -76, z: 450},
+        {x: 250, y: 50, z: 450}, {x: -250, y: 50, z: 450}
+    ], '#0a0a0a', '#9c27b0', 3); 
 }
 
 function drawWTTable() {
     const w = 76;
     const l = 137;
     
-    // Sombra da mesa
+    // Sombra gigante e esfumada sob a mesa preta
     drawPoly3D([
         {x: -w-5, y: -75, z: -l-5}, {x: w+5, y: -75, z: -l-5},
         {x: w+5, y: -75, z: l+5}, {x: -w-5, y: -75, z: l+5}
-    ], 'rgba(0,0,0,0.7)');
+    ], 'rgba(0,0,0,0.8)');
 
-    // Topo estilo Dark WTT (Preto/Cinza Escuro) com bordas Magenta/Neon
+    // Topo da Mesa - WTT Style (Preto Fosco com Bordas Magenta Vibrantes)
     drawPoly3D([
         {x: -w, y: 0, z: -l}, {x: w, y: 0, z: -l},
         {x: w, y: 0, z: l}, {x: -w, y: 0, z: l}
-    ], '#1a1a1a', '#ff007f', 4); // Borda magenta forte
+    ], '#191919', '#ff007f', 4); // Borda rosa neon pro espetáculo
 
-    // Base/pernas da mesa WTT (Geralmente é um bloco sólido no meio)
+    // Caixa Base Típica em estádios profissionais em formato de trapézio invertido 
     drawPoly3D([
-        {x: -40, y: -76, z: -30}, {x: 40, y: -76, z: -30},
-        {x: 40, y: 0, z: -30}, {x: -40, y: 0, z: -30}
-    ], '#0a0a0a');
+        {x: -45, y: -76, z: -40}, {x: 45, y: -76, z: -40},
+        {x: 40, y: 0, z: -40}, {x: -40, y: 0, z: -40}
+    ], '#000000');
     drawPoly3D([
-        {x: -40, y: -76, z: 30}, {x: 40, y: -76, z: 30},
-        {x: 40, y: 0, z: 30}, {x: -40, y: 0, z: 30}
-    ], '#111');
+        {x: -45, y: -76, z: 40}, {x: 45, y: -76, z: 40},
+        {x: 40, y: 0, z: 40}, {x: -40, y: 0, z: 40}
+    ], '#0C0C0C');
+    // Lateral 1
     drawPoly3D([
-        {x: -40, y: -76, z: -30}, {x: -40, y: -76, z: 30},
-        {x: -40, y: 0, z: 30}, {x: -40, y: 0, z: -30}
-    ], '#1e1e1e');
+        {x: -45, y: -76, z: -40}, {x: -45, y: -76, z: 40},
+        {x: -40, y: 0, z: 40}, {x: -40, y: 0, z: -40}
+    ], '#111111');
+    // Lateral 2
     drawPoly3D([
-        {x: 40, y: -76, z: -30}, {x: 40, y: -76, z: 30},
-        {x: 40, y: 0, z: 30}, {x: 40, y: 0, z: -30}
-    ], '#1e1e1e');
+        {x: 45, y: -76, z: -40}, {x: 45, y: -76, z: 40},
+        {x: 40, y: 0, z: 40}, {x: 40, y: 0, z: -40}
+    ], '#111111');
 
-    // Linha Central (Rosa/Magenta clara)
+    // Linha Divisória de Centro da mesa (Magenta)
     const cl1 = project(0, 0.2, -l);
     const cl2 = project(0, 0.2, l);
     if(cl1 && cl2) {
-        ctx.strokeStyle = '#ffb3ff';
-        ctx.lineWidth = cl1.scale * 2;
+        ctx.strokeStyle = '#ff99e6';
+        ctx.lineWidth = cl1.scale * 2.5;
         ctx.beginPath(); ctx.moveTo(cl1.x, cl1.y); ctx.lineTo(cl2.x, cl2.y); ctx.stroke();
     }
     
-    // Rede
+    // REDE WTT
     const nw = 85; 
     const h = 15.25;
     const n1 = project(-nw, 0, 0); const n2 = project(nw, 0, 0);
     const n3 = project(nw, h, 0); const n4 = project(-nw, h, 0);
     
     if(n1 && n2 && n3 && n4) {
-        // Textura quadriculada para a rede
+        // Película Quadriculada preta p/ Rede
         ctx.fillStyle = 'rgba(20, 20, 20, 0.6)';
         ctx.beginPath();
         ctx.moveTo(n1.x, n1.y); ctx.lineTo(n2.x, n2.y);
         ctx.lineTo(n3.x, n3.y); ctx.lineTo(n4.x, n4.y);
         ctx.closePath(); ctx.fill();
         
-        ctx.strokeStyle = '#ff007f'; ctx.lineWidth = n1.scale * 3; 
-        ctx.beginPath(); ctx.moveTo(n4.x, n4.y); ctx.lineTo(n3.x, n3.y); ctx.stroke();
+        ctx.strokeStyle = '#ff007f'; ctx.lineWidth = n1.scale * 3.5; 
+        ctx.beginPath(); ctx.moveTo(n4.x, n4.y); ctx.lineTo(n3.x, n3.y); ctx.stroke(); // Top border
         
-        ctx.strokeStyle = '#222'; ctx.lineWidth = n1.scale * 4;
+        ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = n1.scale * 4; // Postes base preta
         ctx.beginPath(); ctx.moveTo(n1.x, n1.y); ctx.lineTo(n4.x, n4.y); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(n2.x, n2.y); ctx.lineTo(n3.x, n3.y); ctx.stroke();
     }
 }
 
-// Metal Slug Style Pixel Constructor
-function drawMetalSlugActor(actor, isOpponent) {
+// SPRITES PLAYER ESTILO METAL SLUG PING PONG 
+function drawDynamicActor(actor, isOpponent) {
     const base = project(actor.x, actor.y, actor.z);
     if (!base) return;
     
@@ -449,79 +450,84 @@ function drawMetalSlugActor(actor, isOpponent) {
     const s = Math.max(0.1, base.scale); 
     ctx.scale(s, s);
     
-    // Core Colors (Metal slug style)
-    const skinDark = '#b56d48';
-    const skinLight = '#e5a57a';
-    const outline = '#2b2b2b'; // Contorno forte
-    const shirtPri = isOpponent ? '#cf2e2e' : '#aeea00'; // Vermelho p/ oponente, Verde Lima p/ player (estilo Brasil ou Modernizado)
-    const shirtSec = isOpponent ? '#8b1313' : '#64dd17'; // Sombreamento
-    const shorts = '#1a1a24';
+    // Paleta Clássica de Sprites de Luta da SNK / Metal Slug
+    const skinDark = '#ae6340';
+    const skinBase = '#dca376';
+    const skinHI = '#ffc8a5'; // Highlight músculo
+    const outline = '#2b211f'; 
+    const shirtRedDark = '#9f1d24', shirtRed = '#dd2d31'; // Adversário (Chines)  
+    const shirtGreenDark = '#25801c', shirtGreen = '#3ac231';// Player (Brasileiro/Verde MetalSlug)
+    const shirtPri = isOpponent ? shirtRed : shirtGreen; 
+    const shirtSec = isOpponent ? shirtRedDark : shirtGreenDark; 
+    const shorts = '#1a1820';
     const shoe = '#fff';
 
-    // Sombra Blob no chao
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    // Blob Sombra sob Player
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
-    ctx.ellipse(0, 0, 35, 12, 0, 0, Math.PI*2);
+    ctx.ellipse(0, 0, 32, 12, 0, 0, Math.PI*2);
     ctx.fill();
 
-    const legH = 44;
-    const torsoW = 38, torsoH = 48;
-    const headW = 26, headH = 30;
+    const legH = 40;
+    const torsoW = 34, torsoH = 42;
+    const headW = 24, headH = 26;
     
-    let wSt = (actor.state !== 'idle' || Math.abs(actor.vx) > 0) ? 10 : 0;
-    let jogAnim = Math.sin(Date.now() / 150) * 4 * (Math.abs(actor.vx) > 0 ? 1 : 0);
+    // Jog Animation pro corpo abaixar qnd move
+    let wSt = (actor.state !== 'idle' || Math.abs(actor.vx) > 0) ? 12 : 6;
+    let jogAnim = Math.sin(Date.now() / 120) * 4 * (Math.abs(actor.vx) > 0 ? 1 : 0);
     
-    // Pernas (com outline e joelhos marcados)
     function drawLeg(lx, ly, isLeft) {
+        // Outline Leg
         ctx.fillStyle = outline; ctx.fillRect(lx-1, ly - legH -1, 14, legH+2);
         ctx.fillStyle = skinDark; ctx.fillRect(lx, ly - legH, 12, legH);
-        ctx.fillStyle = skinLight; ctx.fillRect(lx+2, ly - legH + 4, 8, legH-8);
-        ctx.fillStyle = shorts; ctx.fillRect(lx-2, ly - legH - 6, 16, 18); // Short piece
+        ctx.fillStyle = skinBase; ctx.fillRect(lx+2, ly - legH + 4, 8, legH-8);
+        ctx.fillStyle = shorts; ctx.fillRect(lx-2, ly - legH - 2, 16, 16); 
         // Tenis
         ctx.fillStyle = outline; ctx.fillRect(lx-8, ly-6, 20, 8);
         ctx.fillStyle = shoe; ctx.fillRect(lx-6, ly-4, 16, 6);
-        ctx.fillStyle = '#ff0044'; ctx.fillRect(lx+2, ly-4, 4, 4); // logo tenis
+        ctx.fillStyle = '#ff0044'; ctx.fillRect(lx+2, ly-4, 4, 4); 
     }
     
-    drawLeg(-14 - wSt, 0 - jogAnim, true);
-    drawLeg(2 + wSt, 0 + jogAnim, false);
+    // Desenha as duas pernocas abertas
+    drawLeg(-12 - wSt, 0 - jogAnim, true);
+    drawLeg(0 + wSt, 0 + jogAnim, false);
 
-    // Corpo Musculoso Metal Slug style (V shape)
+    // Corpo V-Shape estilo Arcade Hero
     let bodyY = -legH - torsoH + Math.abs(jogAnim);
-    let tilt = isOpponent ? -5 : 5; // Inclinação pra frente
-
+    let tilt = isOpponent ? -5 : 5; // Inclinação arcade
+    
     ctx.save();
     ctx.translate(0, bodyY + torsoH); 
-    // Corpo
-    ctx.fillStyle = outline; ctx.fillRect(-torsoW/2 - 2, -torsoH - 2, torsoW+4, torsoH+4); // Contorno
-    ctx.fillStyle = shirtSec; ctx.fillRect(-torsoW/2, -torsoH, torsoW, torsoH); // Camisa base manga curta
-    ctx.fillStyle = shirtPri; ctx.fillRect(-torsoW/2 + 2, -torsoH + 2, torsoW - 4, torsoH - 6); // Peitoral destaque
-    
-    // Detalhes da blusa
-    ctx.fillStyle = outline; ctx.fillRect(-torsoW/2+10, -torsoH+10, torsoW-20, 2); // Linha no peito
 
-    // Cabeça detalhada
+    // Tórax
+    ctx.fillStyle = outline; ctx.fillRect(-torsoW/2 - 2, -torsoH - 2, torsoW+4, torsoH+4); // Contorno
+    ctx.fillStyle = shirtSec; ctx.fillRect(-torsoW/2, -torsoH, torsoW, torsoH); 
+    ctx.fillStyle = shirtPri; ctx.fillRect(-torsoW/2 + 2, -torsoH + 2, torsoW - 4, torsoH - 6); 
+    ctx.fillStyle = '#fff'; ctx.fillRect(-8, -torsoH + 6, 16, 12); // Design branco no peito estilo camisa esporte
+    // Detalhe cinto
+    ctx.fillStyle = outline; ctx.fillRect(-torsoW/2, -2, torsoW, 2); 
+
+    // Cabeca (Olhando pra bola)
     let headY = -torsoH - headH;
     ctx.fillStyle = outline; ctx.fillRect(-headW/2 - 2, headY - 2, headW+4, headH+4);
     ctx.fillStyle = skinDark; ctx.fillRect(-headW/2, headY, headW, headH);
-    ctx.fillStyle = skinLight; ctx.fillRect(-headW/2 + 4, headY + 4, headW - 8, headH - 12);
+    ctx.fillStyle = skinBase; ctx.fillRect(-headW/2 + 4, headY + 4, headW - 8, headH - 12);
     
-    // Cabelo estilo anime/metal slug (Bandana pro player)
-    ctx.fillStyle = '#222'; // Cabelo
+    // Cabelo Bandana estilo Sprite Arcade
     if(!isOpponent) {
-        // Bandana Amarela p/ Player
-        ctx.fillStyle = '#ffd600'; ctx.fillRect(-headW/2-2, headY+4, headW+4, 6);
-        ctx.fillStyle = '#222'; ctx.fillRect(-headW/2-2, headY-6, headW+4, 10); // Spiky hair
+        ctx.fillStyle = '#e81807'; // Bandana vermelha do protagonista de arcade
+        ctx.fillRect(-headW/2-2, headY+6, headW+4, 6);
+        ctx.fillStyle = '#8f563b'; // Cabelo Castanho espetado
+        ctx.fillRect(-headW/2-2, headY-8, headW+4, 14); 
     } else {
         ctx.fillStyle = '#111'; ctx.fillRect(-headW/2-2, headY-4, headW+4, 12); 
     }
 
     // Braços
     let timer = actor.timer;
-    let rX = 20; 
-    let lX = -20;
+    let rX = 18; 
+    let lX = -18;
     
-    // Ângulos base para Third Person View
     let rightArmAngle = Math.PI/2.5;
     let leftArmAngle = -Math.PI/3;
 
@@ -543,42 +549,36 @@ function drawMetalSlugActor(actor, isOpponent) {
         }
     }
 
-    // Helper p/ desenhar braço bombado MS
+    // Desenha Braço Musculoso Metal Slug Style com Raquete
     function drawMuscleArm(x, y, angle, holdsPaddle) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
         
-        ctx.fillStyle = outline; ctx.fillRect(-8, -4, 16, 40); // contorno
-        ctx.fillStyle = skinDark; ctx.fillRect(-6, -2, 12, 36);
-        ctx.fillStyle = skinLight; ctx.fillRect(-2, 0, 6, 28); // Highlight musculo
+        ctx.fillStyle = outline; ctx.fillRect(-7, -4, 14, 38); 
+        ctx.fillStyle = skinDark; ctx.fillRect(-5, -2, 10, 34);
+        ctx.fillStyle = skinHI; ctx.fillRect(-1, 0, 4, 26); // Detalhe musculo brilhante
         
-        // Manga
-        ctx.fillStyle = outline; ctx.fillRect(-10, -6, 20, 16);
-        ctx.fillStyle = shirtPri; ctx.fillRect(-8, -4, 16, 12);
+        ctx.fillStyle = outline; ctx.fillRect(-9, -6, 18, 14);
+        ctx.fillStyle = shirtPri; ctx.fillRect(-7, -4, 14, 10);
 
         if (holdsPaddle) {
-            // Raquete 3D Look
-            ctx.translate(-2, 36);
+            ctx.translate(-2, 34);
             ctx.rotate(isOpponent ? Math.PI : -Math.PI/4); 
-            // Cabo
-            ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-4, 0, 8, 16);
-            ctx.fillStyle = outline; ctx.beginPath(); ctx.ellipse(0, 24, 18, 20, 0, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#e62424'; ctx.beginPath(); ctx.ellipse(0, 24, 15, 17, 0, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(2, 24, 12, 14, 0, 0, Math.PI*2); ctx.fill(); // Inversão
+            ctx.fillStyle = outline; ctx.fillRect(-4, 0, 8, 14); // Cabo
+            ctx.fillStyle = outline; ctx.beginPath(); ctx.ellipse(0, 22, 17, 19, 0, 0, Math.PI*2); ctx.fill(); 
+            ctx.fillStyle = '#e62424'; ctx.beginPath(); ctx.ellipse(0, 22, 14, 16, 0, 0, Math.PI*2); ctx.fill(); // Borracha Red
+            ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(2, 22, 11, 13, 0, 0, Math.PI*2); ctx.fill(); // Inversão Negra
         } else {
-            // Punho fechado
-            ctx.fillStyle = skinDark; ctx.fillRect(-8, 34, 16, 12);
+            ctx.fillStyle = skinDark; ctx.fillRect(-6, 32, 12, 10); // Mao Fechada
         }
         ctx.restore();
     }
 
     if (isOpponent) {
-        // Inverte a mão da raquete para parecer destro de frente
-        drawMuscleArm(lX, -torsoH + 6, rightArmAngle * -1, true); // Oponente (Mão direita pra gente é esquerda dele)
+        drawMuscleArm(lX, -torsoH + 6, rightArmAngle * -1, true); 
         drawMuscleArm(rX, -torsoH + 6, leftArmAngle * -1, false);
     } else {
-        // Player de costas
         drawMuscleArm(rX, -torsoH + 6, rightArmAngle, true); 
         drawMuscleArm(lX, -torsoH + 6, leftArmAngle, false);
     }
@@ -595,7 +595,7 @@ function drawBallWithShadow() {
     const shadowProj = project(ball.x, shadowY, ball.z);
     
     if (shadowProj) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.beginPath();
         let shadowDist = Math.max(0, ball.y - shadowY);
         let sS = (ball.radius * shadowProj.scale * 1.5) - (shadowDist * 0.04);
@@ -608,25 +608,24 @@ function drawBallWithShadow() {
     const proj = project(ball.x, ball.y, ball.z);
     if (!proj) return;
     
-    // Bola principal Neon White/Yellow
     let bRad = ball.radius * proj.scale;
     if(bRad <= 0) return;
 
+    // Bola branca brilhante para o cenário escuro
     ctx.fillStyle = '#ffffff'; 
     ctx.beginPath();
     ctx.arc(proj.x, proj.y, bRad, 0, Math.PI*2);
     ctx.fill();
 
-    // Glow Effect
     ctx.shadowBlur = 10;
-    ctx.shadowColor = '#ffff00';
-    ctx.fillStyle = '#fffcb3';
+    ctx.shadowColor = '#fff';
+    ctx.fillStyle = '#fffce0';
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, bRad*0.8, 0, Math.PI*2);
+    ctx.arc(proj.x, proj.y, bRad*0.7, 0, Math.PI*2);
     ctx.fill();
-    ctx.shadowBlur = 0; // reset
+    ctx.shadowBlur = 0; 
     
-    // Add rastro de câmera lenta se timeScale < 1
+    // Efeito Blur do Slow Motion
     if(ball.timeScale < 1.0 && ball.state === 'air') {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         const projT = project(ball.x - ball.vx*2, ball.y - ball.vy*2, ball.z - ball.vz*2);
@@ -637,7 +636,7 @@ function drawBallWithShadow() {
 }
 
 function render() {
-    drawInfinityArena();
+    drawArena();
 
     let actors = [
         {type: 'ai', obj: ai},
@@ -655,19 +654,17 @@ function render() {
     for(let i=0; i<actors.length; i++) {
         let a = actors[i];
         if(a.type === 'table') drawWTTable();
-        else if(a.type === 'ai') drawMetalSlugActor(a.obj, true);
-        else if(a.type === 'player') drawMetalSlugActor(a.obj, false);
+        else if(a.type === 'ai') drawDynamicActor(a.obj, true);
+        else if(a.type === 'player') drawDynamicActor(a.obj, false);
         else if(a.type === 'ball') drawBallWithShadow();
     }
     
-    // Post process Slomo effect overlay
+    // Focus Slow Motion Cam Overlay Layer
     if(ball.timeScale < 1.0) {
-        ctx.fillStyle = 'rgba(255, 0, 255, 0.05)';
+        ctx.fillStyle = 'rgba(255, 0, 127, 0.05)';
         ctx.fillRect(0,0, canvas.width, canvas.height);
-        
-        // Borda glitch/focus
         ctx.strokeStyle = 'rgba(255, 0, 127, 0.3)';
-        ctx.lineWidth = 10;
+        ctx.lineWidth = 15;
         ctx.strokeRect(0,0, canvas.width, canvas.height);
     }
 }

@@ -4,7 +4,8 @@ const scoreDisplay = document.getElementById('score-display');
 const infoDisplay = document.getElementById('info-display');
 
 // Camera & 3D Engine Setup
-const camera = { x: 0, y: 150, z: -350, focus: 250 }; // y is height, z is depth
+// Câmera posicionada bem atrás e acima do jogador para visão em 3ª pessoa
+const camera = { x: 0, y: 220, z: -550, focus: 400 };
 
 function project(x, y, z) {
     const dz = z - camera.z;
@@ -12,39 +13,42 @@ function project(x, y, z) {
     const f = camera.focus / dz;
     return {
         x: canvas.width / 2 + (x - camera.x) * f,
-        y: canvas.height / 2 - (y - camera.y) * f, // 3D Y is up, Canvas Y is down
-        scale: f
+        y: canvas.height / 2 - (y - camera.y) * f,
+        scale: f,
+        depth: dz
     };
 }
 
 // ---------------- GAME STATE -----------------
 let ball = {
-    x: -20, y: 20, z: -170, // y=0 is table surface, y=-76 is ground
+    x: 0, y: 20, z: -170,
     vx: 0, vy: 0, vz: 0,
-    radius: 3,
-    state: 'idle' // 'idle', 'air'
+    radius: 4,
+    state: 'idle',
+    timeScale: 1.0 // Para efeito de câmera lenta no saque
 };
 
+// Character Stats
 let player = {
-    x: 0, y: -76, z: -200, 
-    vx: 0, speed: 4,
-    state: 'idle', // 'idle', 'forehand', 'backhand', 'serve_toss'
+    x: -30, y: -76, z: -250, 
+    vx: 0, vz: 0, speed: 4.5,
+    state: 'idle', 
     timer: 0,
     score: 0
 };
 
 let ai = {
-    x: 0, y: -76, z: 200,
-    speed: 3,
+    x: 30, y: -76, z: 200,
+    vx: 0, vz: 0, speed: 3.5,
     state: 'idle',
     timer: 0,
     score: 0,
     targetX: 0
 };
 
-let gamePhase = 'START'; // START, P1_SERVE, P2_SERVE, RALLY
-let lastHitter = 0; // 1 = p1, 2 = ai
-let lastBounceSide = 0; // 0 = none, 1 = p1_side, 2 = ai_side
+let gamePhase = 'START'; 
+let lastHitter = 0; 
+let lastBounceSide = 0; 
 let serveTossed = false;
 
 // Input tracking
@@ -65,8 +69,9 @@ window.addEventListener('keydown', (e) => {
             player.timer = 0;
             ball.state = 'air';
             ball.vx = 0;
-            ball.vy = 8; // Joga pra cima
+            ball.vy = 8; // Altura do saque
             ball.vz = 0;
+            ball.timeScale = 0.3; // Câmera lenta
             infoDisplay.innerText = "Bata na bola! (C ou V)";
             infoDisplay.style.animation = "none";
         }
@@ -87,22 +92,21 @@ window.addEventListener('keyup', (e) => {
 
 // ---------------- LOGIC -----------------
 function hitBallByPlayer(type) {
-    if (lastHitter === 1 && gamePhase === 'RALLY') return; // Evita dois toques
+    if (lastHitter === 1 && gamePhase === 'RALLY') return; 
     
     lastHitter = 1;
     lastBounceSide = 0;
     gamePhase = 'RALLY';
+    ball.timeScale = 1.0; // Volta a velocidade normal
     infoDisplay.innerText = "";
     
-    // Hit physics
-    ball.vz = 14 + Math.random() * 2; // Força pra frente
-    ball.vy = 4.5 + Math.random(); // Arco
-    let hitOffset = ball.x - player.x; // Mira
-    ball.vx = hitOffset * 0.15;
+    ball.vz = 14 + Math.random() * 3; 
+    ball.vy = 4.5 + Math.random(); 
+    let hitOffset = ball.x - player.x; 
+    ball.vx = hitOffset * 0.12;
     
-    // Efeito
-    if (type === 'forehand') ball.vx += 1.5;
-    else if (type === 'backhand') ball.vx -= 1.5;
+    if (type === 'forehand') ball.vx += 2.0;
+    else if (type === 'backhand') ball.vx -= 2.0;
 }
 
 function hitBallByAi(type) {
@@ -111,29 +115,29 @@ function hitBallByAi(type) {
     lastHitter = 2;
     lastBounceSide = 0;
     gamePhase = 'RALLY';
+    ball.timeScale = 1.0;
     
-    ball.vz = -(13 + Math.random() * 2);
-    ball.vy = 4.5 + Math.random();
+    ball.vz = -(15 + Math.random() * 2);
+    ball.vy = 4.0 + Math.random();
     
-    // Mira no player
-    let targetX = player.x + (Math.random() - 0.5) * 60;
+    let targetX = player.x + (Math.random() - 0.5) * 80;
     let framesToReach = 280 / Math.abs(ball.vz);
     ball.vx = (targetX - ai.x) / framesToReach;
 }
 
 function resetPointFor(p, reason) {
-    if (gamePhase === 'START' && p === 0) return; // ignore initial setup errors if any
+    if (gamePhase === 'START' && p === 0) return; 
     
     if (p === 1) player.score++;
     else if (p === 2) ai.score++;
     
     scoreDisplay.innerText = `${player.score} - ${ai.score}`;
     infoDisplay.innerText = reason;
-    infoDisplay.style.animation = ""; // reset blink
+    infoDisplay.style.animation = ""; 
     
-    gamePhase = 'WAIT'; // Pause 
+    gamePhase = 'WAIT'; 
+    ball.timeScale = 1.0;
     setTimeout(() => {
-        // Alternar saque
         let totalPts = player.score + ai.score;
         gamePhase = (Math.floor(totalPts / 2) % 2 === 0) ? 'P1_SERVE' : 'P2_SERVE';
         resetBall();
@@ -142,6 +146,7 @@ function resetPointFor(p, reason) {
 
 function resetBall() {
     ball.vx = 0; ball.vy = 0; ball.vz = 0;
+    ball.timeScale = 1.0;
     lastBounceSide = 0;
     lastHitter = 0;
     serveTossed = false;
@@ -153,108 +158,116 @@ function resetBall() {
     } else {
         ball.state = 'idle';
         infoDisplay.innerText = "Adversário Sacando...";
-        // AI Saque Sequence
+        player.state = 'idle';
         setTimeout(() => {
             if(gamePhase !== 'P2_SERVE') return;
             ai.state = 'serve_toss';
             ai.timer = 0;
             ball.state = 'air';
-            ball.x = ai.x - 10;
+            ball.x = ai.x - 12;
             ball.y = 20;
             ball.z = ai.z - 5;
             ball.vy = 8;
+            ball.timeScale = 0.3;
             
             setTimeout(() => {
                 if(gamePhase !== 'P2_SERVE') return;
                 ai.state = 'forehand';
                 ai.timer = 0;
                 hitBallByAi('forehand');
-            }, 500);
+            }, 500 / 0.3); // ajustado pro tempo do slo-mo
         }, 1500);
     }
 }
 
 function updatePhysics() {
     // Player Move
-    if (keys['ArrowLeft']) player.x -= player.speed;
-    if (keys['ArrowRight']) player.x += player.speed;
-    if (keys['ArrowUp']) player.z -= player.speed;
-    if (keys['ArrowDown']) player.z += player.speed;
+    player.vx = 0; player.vz = 0;
+    if (keys['ArrowLeft']) player.vx = -player.speed;
+    if (keys['ArrowRight']) player.vx = player.speed;
+    if (keys['ArrowUp']) player.vz = -player.speed;
+    if (keys['ArrowDown']) player.vz = player.speed;
     
+    player.x += player.vx;
+    player.z += player.vz;
     // Limita na quadra
-    player.x = Math.max(-120, Math.min(120, player.x));
-    player.z = Math.max(-280, Math.min(-140, player.z));
+    player.x = Math.max(-140, Math.min(140, player.x));
+    player.z = Math.max(-350, Math.min(-180, player.z));
 
-    // Player Animation
+    // Player State Machine
     if (player.state !== 'idle') {
-        player.timer++;
+        // Se estiver em câmera lenta, o timer do player também roda em câmera lenta no saque
+        player.timer += (gamePhase === 'P1_SERVE' ? ball.timeScale : 1.0);
         
-        // Janela de hitbox ativa (Frames 5 ao 12)
-        if ((player.state === 'forehand' || player.state === 'backhand') && player.timer >= 5 && player.timer <= 12) {
+        let hitboxWindowStart = 5;
+        let hitboxWindowEnd = 16;
+        
+        if ((player.state === 'forehand' || player.state === 'backhand') && 
+            player.timer >= hitboxWindowStart && player.timer <= hitboxWindowEnd) {
+            
             let dx = ball.x - player.x;
             let dz = ball.z - player.z;
-            let dy = ball.y - 20; // Altura da cintura
+            let dy = ball.y - 25; 
             let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
             
-            // Distância para rebater é grandinha (arcade) e a bola precisa estar vindo ou parada (toss)
-            if (dist < 45 && ball.vz <= 2) {
+            if (dist < 55 && ball.vz <= 2) {
                 hitBallByPlayer(player.state);
             }
         }
         
-        if (player.timer > 20) {
+        if (player.timer > 22) {
             player.state = 'idle';
         }
     }
 
-    // AI Logic (segue o X da bola quando a bola vem)
+    // AI Logic
     if (ball.vz > 0 && ball.z > -50) {
-        let t = (160 - ball.z) / ball.vz;
+        let t = (200 - ball.z) / ball.vz;
         ai.targetX = ball.x + ball.vx * t;
     } else {
-        ai.targetX = 0; // volta pro meio
+        ai.targetX = 0; 
     }
     
-    ai.targetX = Math.max(-100, Math.min(100, ai.targetX));
-    if (ai.x < ai.targetX - ai.speed) ai.x += ai.speed;
-    if (ai.x > ai.targetX + ai.speed) ai.x -= ai.speed;
-    ai.z = 200; // AI fica fixa no fundo
+    ai.targetX = Math.max(-120, Math.min(120, ai.targetX));
+    ai.vx = 0;
+    if (ai.x < ai.targetX - ai.speed) { ai.x += ai.speed; ai.vx = 1; }
+    if (ai.x > ai.targetX + ai.speed) { ai.x -= ai.speed; ai.vx = -1; }
+    ai.z = 240; 
 
-    // AI Animation & Hitbox
-    if (ai.state === 'idle' && ball.vz > 0 && ball.z > 140 && ball.z < 220) {
+    // AI Animation
+    if (ai.state === 'idle' && ball.vz > 0 && ball.z > 140 && ball.z < 260) {
         ai.state = (ball.x > ai.x) ? 'forehand' : 'backhand';
         ai.timer = 0;
     }
 
     if (ai.state !== 'idle') {
-        ai.timer++;
-        if ((ai.state === 'forehand' || ai.state === 'backhand') && ai.timer === 8) { // AI Hit perfeito
+        ai.timer += (gamePhase === 'P2_SERVE' ? ball.timeScale : 1.0);
+        if ((ai.state === 'forehand' || ai.state === 'backhand') && Math.floor(ai.timer) === 8) {
             hitBallByAi(ai.state);
         }
-        if (ai.timer > 20) ai.state = 'idle';
+        if (ai.timer > 22) ai.state = 'idle';
     }
 
-    // Ball Move
+    // Ball Move (with timeScale)
     if (ball.state === 'air') {
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-        ball.z += ball.vz;
-        ball.vy -= 0.5; // GRAVITY
+        ball.x += ball.vx * ball.timeScale;
+        ball.y += ball.vy * ball.timeScale;
+        ball.z += ball.vz * ball.timeScale;
+        ball.vy -= 0.5 * ball.timeScale; // GRAVITY
         
         // Mesa Ping (y < 0) e limites da mesa (Mesa é w=76, l=137)
         if (ball.y < 0 && ball.y > -10 && ball.vy < 0) {
             if (ball.x > -76 && ball.x < 76 && ball.z > -137 && ball.z < 137) {
                 ball.y = 0;
-                ball.vy = Math.abs(ball.vy) * 0.8; // Quica
+                ball.vy = Math.abs(ball.vy) * 0.8; 
+                ball.timeScale = 1.0; // Cancela slowmotion pós-quique
                 
                 let side = ball.z < 0 ? 1 : 2;
                 
                 if (gamePhase === 'RALLY') {
                     if (side === lastBounceSide) {
-                        // Dois piques do mesmo lado -> ponto pro outro
                         resetPointFor((side === 1) ? 2 : 1, "DOIS QUICOS");
                     } else if (lastHitter === side && lastBounceSide === 0) {
-                        // Rebateu e caiu no próprio lado direto
                         resetPointFor((side === 1) ? 2 : 1, "REBATEU PRO PRÓPRIO LADO");
                     }
                 }
@@ -264,18 +277,18 @@ function updatePhysics() {
         
         // Rede (Rede no z=0, altura y=15)
         if (Math.abs(ball.z) < Math.abs(ball.vz) && ball.y < 15.25 && ball.x > -85 && ball.x < 85) {
-            ball.vz *= -0.3; // Bateu na rede
+            ball.vz *= -0.3; 
             ball.vx *= 0.3;
+            ball.timeScale = 1.0;
         }
 
         // Chão Ping (y < -76)
         if (ball.y < -76) {
+            ball.timeScale = 1.0;
             if (gamePhase === 'P1_SERVE' || gamePhase === 'P2_SERVE') {
-                // Errou o saque, deixou cair
                 if(ball.z < 0) resetPointFor(2, "ERRO NO SAQUE");
                 else resetPointFor(1, "ERRO NO SAQUE");
             } else if (gamePhase === 'RALLY') {
-                // Bola caiu no chão. Quem fez o último hit fez ponto?
                 if (lastHitter === 1) {
                     if (lastBounceSide === 2) resetPointFor(1, "BELO PONTO!");
                     else resetPointFor(2, "BOLA FORA");
@@ -284,7 +297,6 @@ function updatePhysics() {
                     else resetPointFor(1, "BOLA FORA");
                 }
             } else {
-                 // GamePhase WAIT
                  ball.y = -76;
                  ball.vy = Math.max(0, ball.vy * -0.5);
                  ball.vx *= 0.8;
@@ -293,12 +305,12 @@ function updatePhysics() {
         }
     } else if (ball.state === 'idle') {
         if (gamePhase === 'P1_SERVE' || gamePhase === 'START') {
-            ball.x = player.x - 12;
-            ball.y = 15; // Altura da mão em relação à mesa (0)
-            ball.z = player.z + 5;
+            ball.x = player.x - 16;
+            ball.y = 20; 
+            ball.z = player.z - 2;
         } else if (gamePhase === 'P2_SERVE') {
-            ball.x = ai.x + 12;
-            ball.y = 15;
+            ball.x = ai.x + 16;
+            ball.y = 20;
             ball.z = ai.z - 5;
         }
     }
@@ -306,7 +318,7 @@ function updatePhysics() {
 
 
 // ---------------- RENDER -----------------
-function drawPoly3D(points, color, strokeColor) {
+function drawPoly3D(points, color, strokeColor, lineWidth = 2) {
     const projPts = points.map(p => project(p.x, p.y, p.z));
     if (projPts.some(p => p === null)) return;
     
@@ -320,233 +332,313 @@ function drawPoly3D(points, color, strokeColor) {
     ctx.fill();
     if (strokeColor) {
         ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = lineWidth * projPts[0].scale * (projPts[0].depth < 0 ? 0.3 : 1); 
+        ctx.lineWidth = Math.max(1, ctx.lineWidth); // Minimo de 1 px
         ctx.stroke();
     }
 }
 
-function drawTableAndNet() {
+function drawInfinityArena() {
+    // Chão cinza escuro/preto
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const floorL = 800;
+    const floorW = 600;
+
+    // Gradiente no fundo estilo Infinity Arena
+    let bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.4);
+    bgGrad.addColorStop(0, '#000');
+    bgGrad.addColorStop(1, '#2c043b');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.5);
+
+    // Linhas neon no chão
+    const l1 = project(-floorW, -76, -floorL);
+    const l2 = project(-floorW, -76, floorL);
+    const r1 = project(floorW, -76, -floorL);
+    const r2 = project(floorW, -76, floorL);
+    if(l1 && l2 && r1 && r2) {
+        ctx.strokeStyle = '#b92b27';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(l1.x, l1.y); ctx.lineTo(l2.x, l2.y); ctx.stroke();
+        ctx.strokeStyle = '#1565C0';
+        ctx.beginPath(); ctx.moveTo(r1.x, r1.y); ctx.lineTo(r2.x, r2.y); ctx.stroke();
+    }
+    
+    // Luzes LED da quadra, estilo WTT
+    drawPoly3D([
+        {x: -250, y: -76, z: 400}, {x: 250, y: -76, z: 400},
+        {x: 250, y: 150, z: 400}, {x: -250, y: 150, z: 400}
+    ], 'rgba(0,0,0,0.8)', '#e100ff'); // Muralha roxa lá no fundo
+}
+
+function drawWTTable() {
     const w = 76;
     const l = 137;
     
-    // Mesa Topo
+    // Sombra da mesa
+    drawPoly3D([
+        {x: -w-5, y: -75, z: -l-5}, {x: w+5, y: -75, z: -l-5},
+        {x: w+5, y: -75, z: l+5}, {x: -w-5, y: -75, z: l+5}
+    ], 'rgba(0,0,0,0.7)');
+
+    // Topo estilo Dark WTT (Preto/Cinza Escuro) com bordas Magenta/Neon
     drawPoly3D([
         {x: -w, y: 0, z: -l}, {x: w, y: 0, z: -l},
         {x: w, y: 0, z: l}, {x: -w, y: 0, z: l}
-    ], '#1e88e5', '#fff'); // Azul estilo olímpico com bordas brancas
+    ], '#1a1a1a', '#ff007f', 4); // Borda magenta forte
 
-    // Mesa Borda (Profundidade)
+    // Base/pernas da mesa WTT (Geralmente é um bloco sólido no meio)
     drawPoly3D([
-        {x: -w, y: -4, z: -l}, {x: w, y: -4, z: -l},
-        {x: w, y: 0, z: -l}, {x: -w, y: 0, z: -l}
-    ], '#0d47a1');
+        {x: -40, y: -76, z: -30}, {x: 40, y: -76, z: -30},
+        {x: 40, y: 0, z: -30}, {x: -40, y: 0, z: -30}
+    ], '#0a0a0a');
     drawPoly3D([
-        {x: w, y: -4, z: -l}, {x: w, y: -4, z: l},
-        {x: w, y: 0, z: l}, {x: w, y: 0, z: -l}
-    ], '#0d47a1');
+        {x: -40, y: -76, z: 30}, {x: 40, y: -76, z: 30},
+        {x: 40, y: 0, z: 30}, {x: -40, y: 0, z: 30}
+    ], '#111');
     drawPoly3D([
-        {x: -w, y: -4, z: l}, {x: -w, y: -4, z: -l},
-        {x: -w, y: 0, z: -l}, {x: -w, y: 0, z: l}
-    ], '#0d47a1');
+        {x: -40, y: -76, z: -30}, {x: -40, y: -76, z: 30},
+        {x: -40, y: 0, z: 30}, {x: -40, y: 0, z: -30}
+    ], '#1e1e1e');
+    drawPoly3D([
+        {x: 40, y: -76, z: -30}, {x: 40, y: -76, z: 30},
+        {x: 40, y: 0, z: 30}, {x: 40, y: 0, z: -30}
+    ], '#1e1e1e');
 
-    // Linha Central (Branca)
+    // Linha Central (Rosa/Magenta clara)
     const cl1 = project(0, 0.2, -l);
     const cl2 = project(0, 0.2, l);
     if(cl1 && cl2) {
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffb3ff';
+        ctx.lineWidth = cl1.scale * 2;
         ctx.beginPath(); ctx.moveTo(cl1.x, cl1.y); ctx.lineTo(cl2.x, cl2.y); ctx.stroke();
     }
     
-    // REDE no z=0
+    // Rede
     const nw = 85; 
     const h = 15.25;
     const n1 = project(-nw, 0, 0); const n2 = project(nw, 0, 0);
     const n3 = project(nw, h, 0); const n4 = project(-nw, h, 0);
     
     if(n1 && n2 && n3 && n4) {
-        ctx.fillStyle = 'rgba(230, 230, 230, 0.4)';
+        // Textura quadriculada para a rede
+        ctx.fillStyle = 'rgba(20, 20, 20, 0.6)';
         ctx.beginPath();
         ctx.moveTo(n1.x, n1.y); ctx.lineTo(n2.x, n2.y);
         ctx.lineTo(n3.x, n3.y); ctx.lineTo(n4.x, n4.y);
         ctx.closePath(); ctx.fill();
         
-        // Bordas da rede
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; // Bandeira Superior Branca
+        ctx.strokeStyle = '#ff007f'; ctx.lineWidth = n1.scale * 3; 
         ctx.beginPath(); ctx.moveTo(n4.x, n4.y); ctx.lineTo(n3.x, n3.y); ctx.stroke();
         
-        // Postes
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 4;
+        ctx.strokeStyle = '#222'; ctx.lineWidth = n1.scale * 4;
         ctx.beginPath(); ctx.moveTo(n1.x, n1.y); ctx.lineTo(n4.x, n4.y); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(n2.x, n2.y); ctx.lineTo(n3.x, n3.y); ctx.stroke();
     }
 }
 
-// Procedural Pixel Art Animator
-function drawActor(actor, isOpponent) {
+// Metal Slug Style Pixel Constructor
+function drawMetalSlugActor(actor, isOpponent) {
     const base = project(actor.x, actor.y, actor.z);
     if (!base) return;
     
     ctx.save();
     ctx.translate(base.x, base.y);
     const s = Math.max(0.1, base.scale); 
-    // Múltiplo de scale pro character ser visualizavel (como se no 3D tivesse 100cm de altura)
     ctx.scale(s, s);
     
-    const skin = isOpponent ? '#A16A54' : '#FFC48C'; // Cor de pele (Opponent = Asiático/Mais pardo, P1 = Branco, p/ gerar variedade baseada nos ref)
-    const shirt = isOpponent ? '#bc3030' : '#ECECEC'; // Adversario = Vermelho (Chines), P1 = Camiseta Branca
-    const shorts = '#1a1a1a';
-    
-    // Desenha Sombra Realista no chão
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    // Core Colors (Metal slug style)
+    const skinDark = '#b56d48';
+    const skinLight = '#e5a57a';
+    const outline = '#2b2b2b'; // Contorno forte
+    const shirtPri = isOpponent ? '#cf2e2e' : '#aeea00'; // Vermelho p/ oponente, Verde Lima p/ player (estilo Brasil ou Modernizado)
+    const shirtSec = isOpponent ? '#8b1313' : '#64dd17'; // Sombreamento
+    const shorts = '#1a1a24';
+    const shoe = '#fff';
+
+    // Sombra Blob no chao
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.beginPath();
-    ctx.ellipse(0, 0, 28, 10, 0, 0, Math.PI*2);
+    ctx.ellipse(0, 0, 35, 12, 0, 0, Math.PI*2);
     ctx.fill();
 
-    const legH = 40;
-    const torsoW = 34, torsoH = 46;
-    const headS = 24;
+    const legH = 44;
+    const torsoW = 38, torsoH = 48;
+    const headW = 26, headH = 30;
     
-    let wideStance = (actor.state !== 'idle' || Math.abs(actor.vx) > 0) ? 8 : 0;
+    let wSt = (actor.state !== 'idle' || Math.abs(actor.vx) > 0) ? 10 : 0;
+    let jogAnim = Math.sin(Date.now() / 150) * 4 * (Math.abs(actor.vx) > 0 ? 1 : 0);
     
-    // Pernas
-    ctx.fillStyle = skin;
-    ctx.fillRect(-12 - wideStance, -legH, 12, legH);
-    ctx.fillRect(0 + wideStance, -legH, 12, legH);
+    // Pernas (com outline e joelhos marcados)
+    function drawLeg(lx, ly, isLeft) {
+        ctx.fillStyle = outline; ctx.fillRect(lx-1, ly - legH -1, 14, legH+2);
+        ctx.fillStyle = skinDark; ctx.fillRect(lx, ly - legH, 12, legH);
+        ctx.fillStyle = skinLight; ctx.fillRect(lx+2, ly - legH + 4, 8, legH-8);
+        ctx.fillStyle = shorts; ctx.fillRect(lx-2, ly - legH - 6, 16, 18); // Short piece
+        // Tenis
+        ctx.fillStyle = outline; ctx.fillRect(lx-8, ly-6, 20, 8);
+        ctx.fillStyle = shoe; ctx.fillRect(lx-6, ly-4, 16, 6);
+        ctx.fillStyle = '#ff0044'; ctx.fillRect(lx+2, ly-4, 4, 4); // logo tenis
+    }
     
-    // Tênis
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(-14 - wideStance, -4, 16, 6);
-    ctx.fillRect(-2 + wideStance, -4, 16, 6);
+    drawLeg(-14 - wSt, 0 - jogAnim, true);
+    drawLeg(2 + wSt, 0 + jogAnim, false);
 
+    // Corpo Musculoso Metal Slug style (V shape)
+    let bodyY = -legH - torsoH + Math.abs(jogAnim);
+    let tilt = isOpponent ? -5 : 5; // Inclinação pra frente
+
+    ctx.save();
+    ctx.translate(0, bodyY + torsoH); 
     // Corpo
-    ctx.fillStyle = shirt;
-    ctx.fillRect(-torsoW/2, -legH - torsoH, torsoW, torsoH);
-    // Gola
-    ctx.fillStyle = isOpponent ? '#8bc34a' : '#1e88e5'; // Gola e Detalhes
-    ctx.fillRect(-8, -legH - torsoH, 16, 6);
+    ctx.fillStyle = outline; ctx.fillRect(-torsoW/2 - 2, -torsoH - 2, torsoW+4, torsoH+4); // Contorno
+    ctx.fillStyle = shirtSec; ctx.fillRect(-torsoW/2, -torsoH, torsoW, torsoH); // Camisa base manga curta
+    ctx.fillStyle = shirtPri; ctx.fillRect(-torsoW/2 + 2, -torsoH + 2, torsoW - 4, torsoH - 6); // Peitoral destaque
     
-    // Shorts
-    ctx.fillStyle = shorts;
-    ctx.fillRect(-torsoW/2 - 2, -legH, torsoW + 4, 16);
+    // Detalhes da blusa
+    ctx.fillStyle = outline; ctx.fillRect(-torsoW/2+10, -torsoH+10, torsoW-20, 2); // Linha no peito
 
-    // Cabeça
-    ctx.fillStyle = skin;
-    ctx.fillRect(-headS/2, -legH - torsoH - headS, headS, headS+4); // Pescoço e Cabeça
-    // Cabelo
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-headS/2 - 2, -legH - torsoH - headS - 2, headS+4, 8); // Topo
-    ctx.fillRect(-headS/2 - 2, -legH - torsoH - headS, headS+4 - 4, 12); // Nuca
+    // Cabeça detalhada
+    let headY = -torsoH - headH;
+    ctx.fillStyle = outline; ctx.fillRect(-headW/2 - 2, headY - 2, headW+4, headH+4);
+    ctx.fillStyle = skinDark; ctx.fillRect(-headW/2, headY, headW, headH);
+    ctx.fillStyle = skinLight; ctx.fillRect(-headW/2 + 4, headY + 4, headW - 8, headH - 12);
+    
+    // Cabelo estilo anime/metal slug (Bandana pro player)
+    ctx.fillStyle = '#222'; // Cabelo
+    if(!isOpponent) {
+        // Bandana Amarela p/ Player
+        ctx.fillStyle = '#ffd600'; ctx.fillRect(-headW/2-2, headY+4, headW+4, 6);
+        ctx.fillStyle = '#222'; ctx.fillRect(-headW/2-2, headY-6, headW+4, 10); // Spiky hair
+    } else {
+        ctx.fillStyle = '#111'; ctx.fillRect(-headW/2-2, headY-4, headW+4, 12); 
+    }
 
-    // Braços Animados
+    // Braços
     let timer = actor.timer;
-    let rightArmAngle = isOpponent ? Math.PI/4 : Math.PI/3;
-    let rX = isOpponent ? -18 : 18; // Qual lado bater
-    let rY = -legH - torsoH + 6; // Ombro
-
-    ctx.save();
-    ctx.translate(rX, rY);
+    let rX = 20; 
+    let lX = -20;
     
+    // Ângulos base para Third Person View
+    let rightArmAngle = Math.PI/2.5;
+    let leftArmAngle = -Math.PI/3;
+
     if (actor.state === 'forehand') {
-        const prog = timer / 20; 
-        if (prog < 0.4) rightArmAngle = Math.PI/1.5 + prog * 1.5; 
-        else rightArmAngle = Math.PI/1.5 - (prog-0.4)*6; 
+        const p = timer / 20; 
+        if (p < 0.4) rightArmAngle = Math.PI - p*2; 
+        else rightArmAngle = Math.PI - 0.8 - (p-0.4)*8; 
     } else if (actor.state === 'backhand') {
-        const prog = timer / 20;
-        if (prog < 0.4) rightArmAngle = -Math.PI/6 - prog * 2; 
-        else rightArmAngle = -Math.PI/6 + (prog-0.4)*4; 
-    } else if (actor.state === 'serve_toss' && isOpponent) {
-        rightArmAngle = Math.PI/6;
+        const p = timer / 20;
+        if (p < 0.4) rightArmAngle = -Math.PI/2 + p*2; 
+        else rightArmAngle = -Math.PI/2 + 0.8 + (p-0.4)*7; 
+    } else if (actor.state === 'serve_toss') {
+        if(!isOpponent) {
+            const p = timer / 20;
+            if (p < 0.5) leftArmAngle = -Math.PI/1.2; 
+            else leftArmAngle = -Math.PI/1.2 + (p-0.5)*3; 
+        } else {
+            rightArmAngle = Math.PI/4;
+        }
     }
-    
-    if (isOpponent) rightArmAngle = -rightArmAngle; 
-    
-    ctx.rotate(rightArmAngle);
-    
-    // Braço Forte
-    ctx.fillStyle = skin;
-    ctx.fillRect(-6, 0, 12, 38);
-    // Raquete colada na mão forte
-    ctx.translate(-2, 36);
-    ctx.rotate(-Math.PI/4);
-    ctx.fillStyle = '#8B4513'; // Cabo
-    ctx.fillRect(-4, 0, 8, 14);
-    ctx.fillStyle = isOpponent ? '#1e1e1e' : '#e62424'; // Borracha Red/Black
-    ctx.beginPath();
-    ctx.ellipse(0, 24, 16, 18, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = isOpponent ? '#e62424' : '#1e1e1e'; // Borracha Inversa
-    ctx.beginPath();
-    ctx.ellipse(0, 24, 12, 14, 0, 0, Math.PI*2);
-    ctx.fill();
+
+    // Helper p/ desenhar braço bombado MS
+    function drawMuscleArm(x, y, angle, holdsPaddle) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        
+        ctx.fillStyle = outline; ctx.fillRect(-8, -4, 16, 40); // contorno
+        ctx.fillStyle = skinDark; ctx.fillRect(-6, -2, 12, 36);
+        ctx.fillStyle = skinLight; ctx.fillRect(-2, 0, 6, 28); // Highlight musculo
+        
+        // Manga
+        ctx.fillStyle = outline; ctx.fillRect(-10, -6, 20, 16);
+        ctx.fillStyle = shirtPri; ctx.fillRect(-8, -4, 16, 12);
+
+        if (holdsPaddle) {
+            // Raquete 3D Look
+            ctx.translate(-2, 36);
+            ctx.rotate(isOpponent ? Math.PI : -Math.PI/4); 
+            // Cabo
+            ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-4, 0, 8, 16);
+            ctx.fillStyle = outline; ctx.beginPath(); ctx.ellipse(0, 24, 18, 20, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#e62424'; ctx.beginPath(); ctx.ellipse(0, 24, 15, 17, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(2, 24, 12, 14, 0, 0, Math.PI*2); ctx.fill(); // Inversão
+        } else {
+            // Punho fechado
+            ctx.fillStyle = skinDark; ctx.fillRect(-8, 34, 16, 12);
+        }
+        ctx.restore();
+    }
+
+    if (isOpponent) {
+        // Inverte a mão da raquete para parecer destro de frente
+        drawMuscleArm(lX, -torsoH + 6, rightArmAngle * -1, true); // Oponente (Mão direita pra gente é esquerda dele)
+        drawMuscleArm(rX, -torsoH + 6, leftArmAngle * -1, false);
+    } else {
+        // Player de costas
+        drawMuscleArm(rX, -torsoH + 6, rightArmAngle, true); 
+        drawMuscleArm(lX, -torsoH + 6, leftArmAngle, false);
+    }
 
     ctx.restore();
-
-    // Braço Livre (Esquerdo)
-    ctx.save();
-    ctx.translate(isOpponent ? 16 : -16, rY); 
-    let leftArmAngle = isOpponent ? -Math.PI/6 : -Math.PI/4;
-    if (actor.state === 'serve_toss') { 
-        const prog = timer / 20;
-        if (prog < 0.5) leftArmAngle = -Math.PI/1.2; // Ergue
-        else leftArmAngle = -Math.PI/1.2 + (prog-0.5)*2; 
-    }
-    ctx.rotate(leftArmAngle);
-    ctx.fillStyle = skin;
-    ctx.fillRect(-6, 0, 12, 34);
-    ctx.restore();
-
     ctx.restore();
 }
 
 function drawBallWithShadow() {
-    let rawVy = ball.vy;
-    
-    // Shadow projetada
-    let shadowY = -76; // Chão
+    let shadowY = -76; 
     if (ball.x > -80 && ball.x < 80 && ball.z > -140 && ball.z < 140) {
-        shadowY = 0; // Se estiver sobre a mesa, a sombra é na altura da mesa (y=0)
+        shadowY = 0; 
     }
     const shadowProj = project(ball.x, shadowY, ball.z);
     
     if (shadowProj) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.beginPath();
-        // A sombra fica menor se a bola está muito alta
         let shadowDist = Math.max(0, ball.y - shadowY);
-        let sS = (ball.radius * shadowProj.scale * 1.5) - (shadowDist * 0.05);
+        let sS = (ball.radius * shadowProj.scale * 1.5) - (shadowDist * 0.04);
         if(sS > 0) {
             ctx.ellipse(shadowProj.x, shadowProj.y, sS*2, sS, 0, 0, Math.PI*2);
             ctx.fill();
         }
     }
     
-    // Bola Real
     const proj = project(ball.x, ball.y, ball.z);
     if (!proj) return;
     
-    ctx.fillStyle = '#ffb300'; // Amarelo Laranja 3-Stars clássica
+    // Bola principal Neon White/Yellow
+    let bRad = ball.radius * proj.scale;
+    if(bRad <= 0) return;
+
+    ctx.fillStyle = '#ffffff'; 
     ctx.beginPath();
-    // Tamanho realista na tela pelo depth scale
-    ctx.arc(proj.x, proj.y, ball.radius * proj.scale, 0, Math.PI*2);
+    ctx.arc(proj.x, proj.y, bRad, 0, Math.PI*2);
     ctx.fill();
+
+    // Glow Effect
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ffff00';
+    ctx.fillStyle = '#fffcb3';
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, bRad*0.8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0; // reset
     
-    // Brilhozinho na bola para dar o toque Pixel Art 3D
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(proj.x - proj.scale*0.8, proj.y - proj.scale*0.8, ball.radius * proj.scale * 0.3, 0, Math.PI*2);
-    ctx.fill();
+    // Add rastro de câmera lenta se timeScale < 1
+    if(ball.timeScale < 1.0 && ball.state === 'air') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        const projT = project(ball.x - ball.vx*2, ball.y - ball.vy*2, ball.z - ball.vz*2);
+        if(projT) {
+            ctx.beginPath(); ctx.arc(projT.x, projT.y, bRad*0.8, 0, Math.PI*2); ctx.fill();
+        }
+    }
 }
 
 function render() {
-    // Background Dark / Gymnasium esthetic
-    ctx.fillStyle = '#0b0c10';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Grid chão apenas para dar perspectiva e referência visual (quadra azul)
-    /* opcional: quadra */
+    drawInfinityArena();
 
-    // Ordenação de rendering baseada na profundidade 3D (Z-Sorting simples)
     let actors = [
         {type: 'ai', obj: ai},
         {type: 'table', z: 0},
@@ -557,15 +649,26 @@ function render() {
     actors.sort((a,b) => {
         let zA = a.obj ? a.obj.z : a.z;
         let zB = b.obj ? b.obj.z : b.z;
-        return zB - zA; // Mais distante desenha antes
+        return zB - zA; 
     });
 
     for(let i=0; i<actors.length; i++) {
         let a = actors[i];
-        if(a.type === 'table') drawTableAndNet();
-        else if(a.type === 'ai') drawActor(a.obj, true);
-        else if(a.type === 'player') drawActor(a.obj, false);
+        if(a.type === 'table') drawWTTable();
+        else if(a.type === 'ai') drawMetalSlugActor(a.obj, true);
+        else if(a.type === 'player') drawMetalSlugActor(a.obj, false);
         else if(a.type === 'ball') drawBallWithShadow();
+    }
+    
+    // Post process Slomo effect overlay
+    if(ball.timeScale < 1.0) {
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.05)';
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+        
+        // Borda glitch/focus
+        ctx.strokeStyle = 'rgba(255, 0, 127, 0.3)';
+        ctx.lineWidth = 10;
+        ctx.strokeRect(0,0, canvas.width, canvas.height);
     }
 }
 

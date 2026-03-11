@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Table Tennis</title>
+    <title>Realistic Pixel Table Tennis</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <h1>Pixel Table Tennis</h1>
-        <canvas id="gameCanvas" width="320" height="256"></canvas>
-        <div class="controls">
-            <p><strong>Setas</strong>: Mover | <strong>X</strong>: Sacar | <strong>C</strong>: Forehand | <strong>V</strong>: Backhand</p>
+    <div class="game-wrapper">
+        <canvas id="gameCanvas" width="512" height="288"></canvas>
+        <div id="ui-layer">
+            <h1 id="score-display">0 - 0</h1>
+            <p id="info-display">Pressione X para Sacar</p>
         </div>
+    </div>
+    <div class="controls-hint">
+        <strong>Setas</strong>: Mover | <strong>X</strong>: Jogar Bola (Saque) | <strong>C</strong>: Forehand | <strong>V</strong>: Backhand
     </div>
     <script src="script.js"></script>
 </body>

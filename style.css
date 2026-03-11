@@ -6,54 +6,68 @@
 }
 
 body {
-    background-color: #1a1a2e;
+    background-color: #0b0c10;
     color: #fff;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     height: 100vh;
+    overflow: hidden;
 }
 
-.game-container {
-    text-align: center;
-    background-color: #16213e;
-    padding: 20px;
-    border-radius: 10px;
-    border: 4px solid #0f3460;
-    box-shadow: 0px 10px 30px rgba(0,0,0,0.5);
-}
-
-h1 {
-    font-size: 20px;
-    margin-bottom: 20px;
-    color: #e94560;
-    text-shadow: 2px 2px 0 #000;
+.game-wrapper {
+    position: relative;
+    box-shadow: 0 0 40px rgba(30, 136, 229, 0.4);
+    border: 4px solid #1f2833;
+    background-color: #0b0e14;
+    width: 1024px;
+    height: 576px;
 }
 
 canvas {
-    background-color: #000;
-    border: 4px solid #fff;
-    image-rendering: pixelated; 
-    width: 640px; 
-    height: 512px; 
     display: block;
-    margin: 0 auto 20px auto;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
 }
 
-.controls {
-    background-color: #0f3460;
-    padding: 15px;
-    border-radius: 8px;
-    border: 2px dashed #e94560;
+#ui-layer {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    width: 100%;
     text-align: center;
+    pointer-events: none;
 }
 
-.controls p {
-    font-size: 10px;
-    line-height: 2;
+#score-display {
+    font-size: 32px;
+    color: #66fcf1;
+    text-shadow: 3px 3px 0 #000;
+    margin-bottom: 20px;
 }
 
-.controls strong {
-    color: #f7d51d;
+#info-display {
+    font-size: 14px;
+    color: #c5c6c7;
+    animation: blink 2s infinite;
+}
+
+.controls-hint {
+    margin-top: 20px;
+    color: #45a29e;
+    font-size: 12px;
+    background: #1f2833;
+    padding: 10px 20px;
+    border-radius: 5px;
+}
+
+.controls-hint strong {
+    color: #66fcf1;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
 }
